@@ -1,0 +1,9 @@
+# Archives & Temporary files
+*.zip
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+scratch/
+test_*.ps1
+Laa_Fresh_Stock_Manager_Vendor_Auth (1).html

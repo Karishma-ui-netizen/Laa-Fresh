@@ -1,0 +1,12 @@
+{
+  "name": "laa-fresh-stock-manager",
+  "version": "2.0.0",
+  "description": "Laa Fresh Stock & Operations Management System",
+  "main": "index.html",
+  "scripts": {
+    "start": "powershell -ExecutionPolicy Bypass -File ./server.ps1"
+  },
+  "keywords": ["inventory", "cold-storage", "stock-manager", "meat-processing"],
+  "author": "Laa Fresh",
+  "license": "UNLICENSED"
+}
