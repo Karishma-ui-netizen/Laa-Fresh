@@ -5,15 +5,21 @@
  */
 
 const CLOUD_CFG_KEY = 'laaFreshCloudCfgV1';
+const DEFAULT_CLOUD_CFG = {
+  url: 'https://kavvhhlnawmiigjuoudq.supabase.co',
+  key: 'sb_publishable_LhJvfFLZWEjT0HbiB-LGAQ_H0MfgQCN',
+  active: true
+};
+
 let cloudSyncTimer = null;
 let isSyncing = false;
 
 function getCloudCfg() {
   try {
-    return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY)) || null;
-  } catch (e) {
-    return null;
-  }
+    let local = JSON.parse(localStorage.getItem(CLOUD_CFG_KEY));
+    if (local && local.url && local.key && local.active) return local;
+  } catch (e) {}
+  return DEFAULT_CLOUD_CFG;
 }
 
 function setCloudCfg(cfg) {
@@ -41,9 +47,13 @@ function cloudPush() {
     try {
       updateSyncStatus('syncing', 'Syncing to cloud…');
       let endpoint = cfg.url.replace(/\/+$/, '') + '/rest/v1/laa_fresh_state';
+
+      let uList = [];
+      try { uList = JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch(e) {}
+
       let payload = {
         id: 'global_state',
-        data: state,
+        data: Object.assign({}, state, { _users: uList }),
         updated_at: new Date().toISOString()
       };
 
@@ -59,7 +69,7 @@ function cloudPush() {
       });
 
       if (res.ok) {
-        updateSyncStatus('online', 'Cloud synced');
+        updateSyncStatus('online', 'Cloud Live');
       } else {
         let errTxt = await res.text();
         console.warn('Cloud sync push warning:', errTxt);
@@ -69,7 +79,7 @@ function cloudPush() {
       console.warn('Cloud push network error:', e);
       updateSyncStatus('offline', 'Offline (local saved)');
     }
-  }, 1200);
+  }, 1000);
 }
 
 /**
@@ -98,17 +108,26 @@ async function cloudPull(silent = false) {
         let remoteState = rows[0].data;
         // Verify state integrity
         if (remoteState && Array.isArray(remoteState.products)) {
+          // Sync users if present
+          if (Array.isArray(remoteState._users) && remoteState._users.length > 0) {
+            try { localStorage.setItem(USERS_KEY, JSON.stringify(remoteState._users)); } catch(e) {}
+            if (typeof loadUsers === 'function') loadUsers();
+          }
+          delete remoteState._users;
+
           Object.assign(state, remoteState);
           try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
           renderAll();
           if (typeof renderStorageUI === 'function') renderStorageUI();
+          if (typeof renderOperationsUI === 'function') renderOperationsUI();
+          if (typeof renderMappingUI === 'function') renderMappingUI();
           if (typeof renderVendors === 'function') renderVendors(true);
-          updateSyncStatus('online', 'Cloud live');
-          if (!silent) toast('Synced latest data from cloud.', 'ok');
+          updateSyncStatus('online', 'Cloud Live');
+          if (!silent) toast('Synced live cloud inventory.', 'ok');
           return true;
         }
       }
-      updateSyncStatus('online', 'Cloud ready (empty)');
+      updateSyncStatus('online', 'Cloud Live');
       return false;
     } else {
       updateSyncStatus('err', 'Cloud pull failed');
@@ -136,7 +155,7 @@ function renderCloudPill() {
   let el = document.getElementById('cloudSyncPill');
   if (!el) return;
   if (isCloudActive()) {
-    updateSyncStatus('online', 'Cloud synced');
+    updateSyncStatus('online', 'Cloud Live');
   } else {
     updateSyncStatus('offline', 'Cloud Sync: Local Only');
   }
@@ -239,9 +258,16 @@ window.disconnectCloud = function() {
   toast('Cloud sync disconnected. Operating in local mode.', 'ok');
 };
 
-// Periodic background sync: checks for updates every 45 seconds when tab is active
+// Periodic background sync: checks for updates every 20 seconds when tab is active
 setInterval(() => {
   if (isCloudActive() && !document.hidden) {
     cloudPull(true);
   }
-}, 45000);
+}, 20000);
+
+// Auto-sync whenever the user switches back to this tab/window
+window.addEventListener('focus', () => {
+  if (isCloudActive()) {
+    cloudPull(true);
+  }
+});
